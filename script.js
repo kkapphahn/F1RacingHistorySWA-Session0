@@ -560,7 +560,31 @@ class GenieChat {
             return result;
         } else if (result.status === 'FAILED') {
             console.error('❌ Message failed:', result);
-            throw new Error('Query failed: ' + (result.error || 'Unknown error'));
+            
+            // Extract detailed error information
+            let errorMessage = 'Query failed';
+            if (result.error) {
+                if (typeof result.error === 'object' && result.error.error) {
+                    errorMessage = result.error.error;
+                } else if (typeof result.error === 'string') {
+                    errorMessage = result.error;
+                } else {
+                    errorMessage = JSON.stringify(result.error);
+                }
+            }
+            
+            // Check for attachments with error details
+            if (result.attachments && result.attachments.length > 0) {
+                console.error('📋 Error attachments:', result.attachments);
+                // Try to extract text content from attachments
+                for (const attachment of result.attachments) {
+                    if (attachment.text && attachment.text.content) {
+                        console.error('💬 Genie explanation:', attachment.text.content);
+                    }
+                }
+            }
+            
+            throw new Error(errorMessage);
         } else {
             // Unknown status - log it but try to continue polling
             console.warn('⚠️  Unknown status:', result.status, '- will try polling again');
@@ -790,6 +814,10 @@ class GenieChat {
             displayMessage = 'Query took too long to complete. Try a simpler question.';
         } else if (message.includes('fetch') || message.includes('network')) {
             displayMessage = 'Could not connect to Genie. Check your internet connection.';
+        } else if (message.includes('Azure storage') || message.includes('not authorized')) {
+            displayMessage = 'Data access error: The Genie Space may not have proper access to your data tables. Check your Databricks workspace permissions and storage configuration.';
+        } else if (message.includes('SQL_EXECUTION_EXCEPTION')) {
+            displayMessage = 'SQL execution error: The query failed to run. This may be due to data access permissions or missing tables in your workspace.';
         }
         
         errorDiv.innerHTML = `
