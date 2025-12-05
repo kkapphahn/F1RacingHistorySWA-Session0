@@ -297,6 +297,56 @@
         </div>
     </footer>
 
+    <!-- Genie Chat Widget -->
+    <div id="genie-chat-widget">
+        <!-- Chat Button - Fixed bottom-right corner -->
+        <button class="genie-chat-btn" id="genie-chat-btn" aria-label="Open F1 Genie Chat">
+            <span class="genie-icon">🤖</span>
+        </button>
+
+        <!-- Chat Panel - Slides in from right (desktop) or bottom (mobile) -->
+        <div class="genie-chat-panel" id="genie-chat-panel" role="dialog" aria-label="F1 Genie Chat">
+            <!-- Header -->
+            <div class="genie-chat-header">
+                <h3>Ask Genie about F1</h3>
+                <button class="genie-close-btn" id="genie-close-btn" aria-label="Close chat">&times;</button>
+            </div>
+
+            <!-- Messages Container - Scrollable area for conversation -->
+            <div class="genie-messages" id="genie-messages">
+                <!-- Welcome Message with Example Queries -->
+                <div class="genie-welcome">
+                    <p class="genie-welcome-text">Ask me anything about F1 history!</p>
+                    <div class="genie-examples">
+                        <button class="genie-example-btn" data-query="Who won the most championships?">
+                            Who won the most championships?
+                        </button>
+                        <button class="genie-example-btn" data-query="Show me fastest lap records">
+                            Show me fastest lap records
+                        </button>
+                        <button class="genie-example-btn" data-query="Tell me about the 1988 season">
+                            Tell me about the 1988 season
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Footer - Text area and send button -->
+            <div class="genie-input-container">
+                <textarea 
+                    id="genie-input" 
+                    class="genie-input" 
+                    placeholder="Ask about F1 history..."
+                    rows="1"
+                    maxlength="1000"
+                    aria-label="Message input"></textarea>
+                <button class="genie-send-btn" id="genie-send-btn" aria-label="Send message" disabled>
+                    <span>➤</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>

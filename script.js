@@ -315,3 +315,564 @@ window.addEventListener('resize', handleResize);
 console.log('%c🏎️ F1 Racing History', 'color: #e10600; font-size: 24px; font-weight: bold; font-family: Orbitron, sans-serif;');
 console.log('%cWelcome to the ultimate F1 history experience!', 'color: #ffd700; font-size: 14px; font-family: Rajdhani, sans-serif;');
 console.log('%cBuilt with passion for Formula 1 racing 🏁', 'color: #e0e0e0; font-size: 12px;');
+
+// ================================
+// GENIE CHAT WIDGET
+// ================================
+
+/**
+ * GenieChat Class
+ * 
+ * Manages the Databricks Genie AI chat widget.
+ * Handles conversation state, message sending, polling, and result rendering.
+ * 
+ * KEY CONCEPTS:
+ * - Conversation: A thread that maintains context across multiple questions
+ * - Message: A user question sent to Genie
+ * - Polling: Checking repeatedly until Genie finishes processing
+ * - Result Data: The actual rows and columns returned from the query
+ */
+class GenieChat {
+    constructor() {
+        // Conversation state
+        this.conversationId = null;
+        this.messages = [];
+        this.isOpen = false;
+        this.isLoading = false;
+        this.lastQuery = null;
+        
+        // DOM elements
+        this.elements = {
+            button: document.getElementById('genie-chat-btn'),
+            panel: document.getElementById('genie-chat-panel'),
+            closeBtn: document.getElementById('genie-close-btn'),
+            messages: document.getElementById('genie-messages'),
+            input: document.getElementById('genie-input'),
+            sendBtn: document.getElementById('genie-send-btn')
+        };
+        
+        // Initialize
+        this.init();
+    }
+    
+    /**
+     * Initialize the chat widget
+     * - Load saved state from localStorage
+     * - Attach event listeners
+     * - Restore previous conversation if exists
+     */
+    init() {
+        console.log('🤖 Initializing Genie Chat Widget...');
+        
+        // Load state from localStorage
+        this.loadState();
+        
+        // Attach event listeners
+        this.elements.button.addEventListener('click', () => this.toggle());
+        this.elements.closeBtn.addEventListener('click', () => this.toggle());
+        this.elements.sendBtn.addEventListener('click', () => this.handleSend());
+        
+        // Handle Enter key (Shift+Enter for new line)
+        this.elements.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.handleSend();
+            }
+        });
+        
+        // Enable/disable send button based on input
+        this.elements.input.addEventListener('input', () => {
+            const text = this.elements.input.value.trim();
+            this.elements.sendBtn.disabled = text.length < 5 || this.isLoading;
+        });
+        
+        // Example button clicks
+        const exampleBtns = document.querySelectorAll('.genie-example-btn');
+        exampleBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const query = btn.getAttribute('data-query');
+                this.elements.input.value = query;
+                this.handleSend();
+            });
+        });
+        
+        console.log('✅ Genie Chat initialized');
+        if (this.conversationId) {
+            console.log('📝 Restored conversation:', this.conversationId);
+        }
+    }
+    
+    /**
+     * Toggle chat panel open/closed
+     */
+    toggle() {
+        this.isOpen = !this.isOpen;
+        this.elements.panel.classList.toggle('open', this.isOpen);
+        
+        if (this.isOpen) {
+            this.elements.input.focus();
+            this.scrollToBottom();
+        }
+    }
+    
+    /**
+     * Handle send button click
+     * Validates input and sends message to Genie
+     */
+    async handleSend() {
+        const text = this.elements.input.value.trim();
+        
+        // Validate input
+        if (text.length < 5) {
+            alert('Please enter at least 5 characters');
+            return;
+        }
+        
+        if (text.length > 1000) {
+            alert('Message is too long (max 1000 characters)');
+            return;
+        }
+        
+        if (this.isLoading) {
+            return; // Already processing
+        }
+        
+        // Clear input and disable send button
+        this.elements.input.value = '';
+        this.elements.sendBtn.disabled = true;
+        this.lastQuery = text;
+        
+        // Send message
+        await this.sendMessage(text);
+    }
+    
+    /**
+     * MAIN WORKFLOW: Send a message to Genie
+     * 
+     * Steps:
+     * 1. Display user message immediately
+     * 2. Start conversation if this is the first message
+     * 3. Send message to Genie API
+     * 4. Show typing indicator
+     * 5. Poll until message is completed
+     * 6. Display results
+     */
+    async sendMessage(content) {
+        console.log('📤 Sending message to Genie:', content);
+        
+        try {
+            this.isLoading = true;
+            this.elements.button.classList.add('processing');
+            
+            // 1. Display user message immediately
+            this.addMessage('user', content);
+            this.scrollToBottom();
+            
+            // 2. Start conversation if needed
+            if (!this.conversationId) {
+                console.log('🆕 Starting new conversation...');
+                const conversationData = await this.callAPI('start-conversation');
+                this.conversationId = conversationData.conversation_id;
+                console.log('✅ Conversation started:', this.conversationId);
+                this.saveState();
+            }
+            
+            // 3. Send message to Genie
+            console.log('💬 Sending message to conversation:', this.conversationId);
+            const messageData = await this.callAPI('send-message', {
+                conversationId: this.conversationId,
+                content: content
+            });
+            
+            const messageId = messageData.id;
+            console.log('✅ Message sent, ID:', messageId);
+            console.log('📊 Initial status:', messageData.status);
+            
+            // 4. Show typing indicator
+            this.showTypingIndicator();
+            
+            // 5. Poll for results (with exponential backoff)
+            console.log('⏳ Polling for results...');
+            const result = await this.pollForResult(messageId);
+            
+            // 6. Display results
+            this.hideTypingIndicator();
+            this.displayResult(result);
+            
+        } catch (error) {
+            console.error('❌ Error sending message:', error);
+            this.hideTypingIndicator();
+            this.showError(error.message, true);
+        } finally {
+            this.isLoading = false;
+            this.elements.button.classList.remove('processing');
+        }
+    }
+    
+    /**
+     * Poll for message result with EXPONENTIAL BACKOFF
+     * 
+     * WHY EXPONENTIAL BACKOFF:
+     * - Genie takes time to generate and execute SQL (typically 2-10 seconds)
+     * - We don't want to spam the API with requests every 100ms
+     * - Start with short delays (500ms), gradually increase to longer delays (5s)
+     * - This balances responsiveness with API efficiency
+     * 
+     * POLLING SEQUENCE:
+     * - Attempt 1: Wait 500ms
+     * - Attempt 2: Wait 1000ms
+     * - Attempt 3: Wait 2000ms
+     * - Attempt 4+: Wait 5000ms (max)
+     * - Timeout after 60 seconds total
+     */
+    async pollForResult(messageId, attempt = 0) {
+        const delays = [500, 1000, 2000, 5000]; // Milliseconds
+        const maxAttempts = 30; // ~60 seconds total
+        
+        if (attempt >= maxAttempts) {
+            throw new Error('Query timeout - Genie took too long to respond. This might be a complex query.');
+        }
+        
+        // Calculate delay for this attempt (exponential backoff)
+        const delay = delays[Math.min(attempt, delays.length - 1)];
+        console.log(`⏱️  Poll attempt ${attempt + 1}, waiting ${delay}ms...`);
+        
+        // Wait before polling
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Poll the API
+        const result = await this.callAPI('poll-result', {
+            conversationId: this.conversationId,
+            messageId: messageId
+        });
+        
+        console.log(`📊 Poll result - Status: ${result.status}`);
+        
+        // Check status
+        if (result.status === 'EXECUTING') {
+            // Still processing, poll again
+            return this.pollForResult(messageId, attempt + 1);
+        } else if (result.status === 'COMPLETED') {
+            console.log('✅ Message completed!');
+            console.log('📦 Full result data:', result);
+            return result;
+        } else if (result.status === 'FAILED') {
+            console.error('❌ Message failed:', result);
+            throw new Error('Query failed: ' + (result.error || 'Unknown error'));
+        } else {
+            console.warn('⚠️  Unexpected status:', result.status);
+            throw new Error('Unexpected status: ' + result.status);
+        }
+    }
+    
+    /**
+     * Display the result from Genie
+     * 
+     * GENIE RESPONSE STRUCTURE:
+     * The completed message contains "attachments" which include:
+     * - query: The generated SQL and execution results
+     * - text: Genie's natural language explanation
+     * 
+     * We extract the actual data from: attachments[0].query.query_result
+     * This contains:
+     * - data_array: The actual rows [[val1, val2], [val3, val4], ...]
+     * - schema.columns: Column names and types
+     * - row_count: Number of rows returned
+     */
+    displayResult(result) {
+        console.log('🎨 Displaying result...');
+        
+        // Check if we have attachments
+        if (!result.attachments || result.attachments.length === 0) {
+            this.addMessage('assistant', 'Genie processed your query but returned no data.');
+            return;
+        }
+        
+        const attachment = result.attachments[0];
+        
+        // Extract query result data
+        if (attachment.query && attachment.query.query_result) {
+            const queryResult = attachment.query.query_result;
+            console.log('📊 Query result data:', queryResult);
+            console.log('📏 Row count:', queryResult.row_count);
+            console.log('📋 Columns:', queryResult.schema?.columns);
+            console.log('📦 Data (first 3 rows):', queryResult.data_array?.slice(0, 3));
+            
+            // Render the data table
+            const tableHTML = this.renderDataTable(queryResult);
+            this.addMessage('assistant', tableHTML);
+        }
+        
+        // Show Genie's explanation if available
+        if (attachment.text && attachment.text.content) {
+            console.log('💬 Genie explanation:', attachment.text.content);
+            // You could display this too if desired
+        }
+        
+        // Show the generated SQL (optional - for learning)
+        if (attachment.query && attachment.query.query) {
+            console.log('🔍 Generated SQL:', attachment.query.query);
+            // Uncomment to show SQL in the chat:
+            // const sqlHTML = `<div class="genie-sql-code"><pre>${this.escapeHtml(attachment.query.query)}</pre></div>`;
+            // this.addMessage('assistant', sqlHTML);
+        }
+        
+        this.scrollToBottom();
+    }
+    
+    /**
+     * Render query result as HTML table
+     * 
+     * INPUT FORMAT (from Genie):
+     * {
+     *   "data_array": [
+     *     ["Lewis Hamilton", 103],
+     *     ["Michael Schumacher", 91],
+     *     ["Sebastian Vettel", 53]
+     *   ],
+     *   "schema": {
+     *     "columns": [
+     *       {"name": "driver", "type": "STRING"},
+     *       {"name": "wins", "type": "LONG"}
+     *     ]
+     *   },
+     *   "row_count": 25,
+     *   "truncated": false
+     * }
+     * 
+     * OUTPUT: HTML table with F1 styling
+     */
+    renderDataTable(queryResult) {
+        const { data_array, schema, row_count } = queryResult;
+        
+        // Handle empty results
+        if (!data_array || data_array.length === 0) {
+            return '<p style="color: var(--medium-gray); font-style: italic;">No data found for this query.</p>';
+        }
+        
+        console.log('🎨 Rendering table with', data_array.length, 'rows and', schema.columns.length, 'columns');
+        
+        let html = '<div class="genie-table-wrapper"><table class="genie-results-table">';
+        
+        // Table Header
+        html += '<thead><tr>';
+        schema.columns.forEach(col => {
+            html += `<th>${this.escapeHtml(col.name)}</th>`;
+        });
+        html += '</tr></thead>';
+        
+        // Table Body
+        html += '<tbody>';
+        data_array.forEach((row, rowIndex) => {
+            html += '<tr>';
+            row.forEach((cell, colIndex) => {
+                const colType = schema.columns[colIndex].type;
+                const isNumeric = ['LONG', 'INT', 'DOUBLE', 'FLOAT', 'DECIMAL'].includes(colType);
+                const className = isNumeric ? 'numeric' : '';
+                const displayValue = cell === null ? 'NULL' : String(cell);
+                html += `<td class="${className}">${this.escapeHtml(displayValue)}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody>';
+        
+        html += '</table></div>';
+        
+        // Show row count if truncated
+        if (queryResult.truncated) {
+            html += `<p style="color: var(--gold); font-size: 0.85rem; margin-top: 5px;">Showing first ${data_array.length} of ${row_count} rows</p>`;
+        }
+        
+        return html;
+    }
+    
+    /**
+     * Call the Azure Function API
+     * This is the secure proxy that talks to Databricks
+     */
+    async callAPI(action, params = {}) {
+        console.log(`🌐 API Call: ${action}`, params);
+        
+        const response = await fetch('/api/genie', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action,
+                ...params
+            })
+        });
+        
+        const result = await response.json();
+        console.log(`📥 API Response (${action}):`, result);
+        
+        if (!result.success) {
+            throw new Error(result.error || 'API request failed');
+        }
+        
+        return result.data;
+    }
+    
+    /**
+     * Add a message to the chat UI
+     */
+    addMessage(role, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `genie-message ${role}`;
+        
+        // If content contains HTML (like tables), insert it directly
+        if (content.includes('<')) {
+            messageDiv.innerHTML = content;
+        } else {
+            messageDiv.textContent = content;
+        }
+        
+        // Add timestamp
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'genie-message-time';
+        timeSpan.textContent = time;
+        messageDiv.appendChild(timeSpan);
+        
+        // Remove welcome message if this is the first real message
+        const welcome = document.querySelector('.genie-welcome');
+        if (welcome && role === 'user') {
+            welcome.remove();
+        }
+        
+        this.elements.messages.appendChild(messageDiv);
+        
+        // Store in messages array
+        this.messages.push({ role, content, timestamp: Date.now() });
+        this.saveState();
+    }
+    
+    /**
+     * Show typing indicator (animated dots)
+     */
+    showTypingIndicator() {
+        const indicator = document.createElement('div');
+        indicator.className = 'genie-typing';
+        indicator.id = 'genie-typing-indicator';
+        indicator.innerHTML = '<span></span><span></span><span></span>';
+        this.elements.messages.appendChild(indicator);
+        this.scrollToBottom();
+    }
+    
+    /**
+     * Hide typing indicator
+     */
+    hideTypingIndicator() {
+        const indicator = document.getElementById('genie-typing-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+    
+    /**
+     * Show error message with retry button
+     */
+    showError(message, canRetry = true) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'genie-error';
+        
+        // User-friendly error messages
+        let displayMessage = message;
+        if (message.includes('401') || message.includes('403')) {
+            displayMessage = 'Authentication failed. Please check your Databricks credentials.';
+        } else if (message.includes('429')) {
+            displayMessage = 'Too many requests. Please wait a moment and try again.';
+        } else if (message.includes('timeout')) {
+            displayMessage = 'Query took too long to complete. Try a simpler question.';
+        } else if (message.includes('fetch') || message.includes('network')) {
+            displayMessage = 'Could not connect to Genie. Check your internet connection.';
+        }
+        
+        errorDiv.innerHTML = `
+            <p><strong>Error:</strong> ${this.escapeHtml(displayMessage)}</p>
+            ${canRetry ? `<button class="genie-retry-btn">Retry</button>` : ''}
+        `;
+        
+        if (canRetry) {
+            errorDiv.querySelector('.genie-retry-btn').addEventListener('click', () => {
+                errorDiv.remove();
+                if (this.lastQuery) {
+                    this.sendMessage(this.lastQuery);
+                }
+            });
+        }
+        
+        this.elements.messages.appendChild(errorDiv);
+        this.scrollToBottom();
+    }
+    
+    /**
+     * Scroll messages container to bottom
+     */
+    scrollToBottom() {
+        this.elements.messages.scrollTop = this.elements.messages.scrollHeight;
+    }
+    
+    /**
+     * Save conversation state to localStorage
+     */
+    saveState() {
+        const state = {
+            conversationId: this.conversationId,
+            messages: this.messages.slice(-20) // Keep last 20 messages
+        };
+        localStorage.setItem('GENIE_CHAT_STATE', JSON.stringify(state));
+        console.log('💾 State saved to localStorage');
+    }
+    
+    /**
+     * Load conversation state from localStorage
+     */
+    loadState() {
+        try {
+            const saved = localStorage.getItem('GENIE_CHAT_STATE');
+            if (saved) {
+                const state = JSON.parse(saved);
+                this.conversationId = state.conversationId;
+                this.messages = state.messages || [];
+                
+                // Restore messages to UI (but keep welcome message if no messages)
+                if (this.messages.length > 0) {
+                    const welcome = document.querySelector('.genie-welcome');
+                    if (welcome) welcome.remove();
+                    
+                    this.messages.forEach(msg => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `genie-message ${msg.role}`;
+                        if (msg.content.includes('<')) {
+                            messageDiv.innerHTML = msg.content;
+                        } else {
+                            messageDiv.textContent = msg.content;
+                        }
+                        this.elements.messages.appendChild(messageDiv);
+                    });
+                }
+                
+                console.log('📂 State loaded from localStorage');
+            }
+        } catch (error) {
+            console.error('Failed to load state:', error);
+        }
+    }
+    
+    /**
+     * Escape HTML to prevent XSS attacks
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+}
+
+// Initialize Genie Chat when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Initializing Genie Chat...');
+    new GenieChat();
+});
