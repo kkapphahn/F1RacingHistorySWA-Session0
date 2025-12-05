@@ -6,10 +6,10 @@
       "direction": "in",
       "name": "req",
       "methods": [
+        "get",
         "post",
         "options"
-      ],
-      "route": "genie"
+      ]
     },
     {
       "type": "http",

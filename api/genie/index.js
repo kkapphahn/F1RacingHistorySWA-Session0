@@ -45,6 +45,20 @@ module.exports = async function (context, req) {
         return;
     }
 
+    // Handle GET request (for testing)
+    if (req.method === 'GET') {
+        context.res = {
+            status: 200,
+            headers,
+            body: JSON.stringify({
+                message: 'Genie API is running',
+                method: 'Use POST with action parameter',
+                timestamp: new Date().toISOString()
+            })
+        };
+        return;
+    }
+
     try {
         // === CONFIGURATION ===
         // These environment variables must be set in Azure Static Web Apps configuration
@@ -57,8 +71,17 @@ module.exports = async function (context, req) {
             throw new Error('Missing required environment variables. Please set DATABRICKS_WORKSPACE_URL, DATABRICKS_PAT_TOKEN, and GENIE_SPACE_ID');
         }
 
-        // Extract action from request body
-        const { action, conversationId, messageId, content } = req.body;
+        // Extract action from request body (handle both parsed and unparsed body)
+        let body = req.body;
+        if (typeof body === 'string') {
+            try {
+                body = JSON.parse(body);
+            } catch (e) {
+                throw new Error('Invalid JSON in request body');
+            }
+        }
+        
+        const { action, conversationId, messageId, content } = body;
 
         // Route to appropriate handler based on action
         let result;
@@ -77,13 +100,15 @@ module.exports = async function (context, req) {
         }
 
         // Return success response
+        const responseBody = JSON.stringify({
+            success: true,
+            data: result
+        });
+        
         context.res = {
             status: 200,
             headers,
-            body: JSON.stringify({
-                success: true,
-                data: result
-            })
+            body: responseBody
         };
 
     } catch (error) {
@@ -93,14 +118,16 @@ module.exports = async function (context, req) {
         context.log.error('Stack trace:', error.stack);
 
         // Return user-friendly error response
+        const errorBody = JSON.stringify({
+            success: false,
+            error: error.message,
+            type: categorizeError(error)
+        });
+        
         context.res = {
             status: 500,
             headers,
-            body: JSON.stringify({
-                success: false,
-                error: error.message,
-                type: categorizeError(error)
-            })
+            body: errorBody
         };
     }
 };
