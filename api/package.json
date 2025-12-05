@@ -4,7 +4,9 @@
   "description": "Azure Functions API for Databricks Genie integration",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "func start",
+    "test": "node test-genie-local.js",
+    "test:watch": "nodemon test-genie-local.js"
   },
   "dependencies": {
     "node-fetch": "^2.6.7"
