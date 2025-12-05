@@ -720,25 +720,59 @@ class GenieChat {
     async callAPI(action, params = {}) {
         console.log(`🌐 API Call: ${action}`, params);
         
-        const response = await fetch('/api/genie', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action,
-                ...params
-            })
-        });
-        
-        const result = await response.json();
-        console.log(`📥 API Response (${action}):`, result);
-        
-        if (!result.success) {
-            throw new Error(result.error || 'API request failed');
+        try {
+            const response = await fetch('/api/genie', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action,
+                    ...params
+                })
+            });
+            
+            // Check if response is OK
+            if (!response.ok) {
+                console.error(`❌ HTTP Error: ${response.status} ${response.statusText}`);
+                
+                // Try to get error details
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Server error: ${response.status}`);
+                } else {
+                    // Response is HTML or plain text (like Azure's 503 page)
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text.substring(0, 200));
+                    
+                    if (response.status === 503) {
+                        throw new Error('Service temporarily unavailable. The function may be starting up or experiencing high load. Please try again in a moment.');
+                    } else if (response.status === 500) {
+                        throw new Error('Server error. Check the Azure Function logs for details.');
+                    } else {
+                        throw new Error(`Server error: ${response.status}`);
+                    }
+                }
+            }
+            
+            // Parse JSON response
+            const result = await response.json();
+            console.log(`📥 API Response (${action}):`, result);
+            
+            if (!result.success) {
+                throw new Error(result.error || 'API request failed');
+            }
+            
+            return result.data;
+            
+        } catch (error) {
+            // Re-throw with more context
+            if (error.message.includes('JSON')) {
+                throw new Error('Invalid response from server. The API may be misconfigured or experiencing issues.');
+            }
+            throw error;
         }
-        
-        return result.data;
     }
     
     /**
