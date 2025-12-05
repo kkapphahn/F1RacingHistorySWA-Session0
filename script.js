@@ -549,8 +549,8 @@ class GenieChat {
         console.log(`📊 Poll result - Status: ${result.status}`);
         
         // Check status
-        // FILTERING_CONTEXT, EXECUTING, QUERY_RESULT_EXPIRED are intermediate states
-        if (result.status === 'EXECUTING' || result.status === 'FILTERING_CONTEXT' || result.status === 'QUERY_RESULT_EXPIRED') {
+        // FILTERING_CONTEXT, EXECUTING, QUERY_RESULT_EXPIRED, ASKING_AI, PENDING_WAREHOUSE are intermediate states
+        if (result.status === 'EXECUTING' || result.status === 'FILTERING_CONTEXT' || result.status === 'QUERY_RESULT_EXPIRED' || result.status === 'ASKING_AI' || result.status === 'PENDING_WAREHOUSE') {
             // Still processing, poll again
             console.log(`⏳ Status: ${result.status} - continuing to poll...`);
             return this.pollForResult(messageId, attempt + 1);
@@ -647,11 +647,9 @@ class GenieChat {
                 }
             }
             
-            // Check for SQL query (show the SQL)
+            // SQL query exists but we don't show it to users (they don't need to see technical details)
             if (attachment.query && attachment.query.query) {
-                console.log('🔍 Found SQL query');
-                const sqlHTML = `<div class="genie-sql-code"><strong>Generated SQL:</strong><pre>${this.escapeHtml(attachment.query.query)}</pre></div>`;
-                this.addMessage('assistant', sqlHTML);
+                console.log('🔍 SQL query generated (not shown to user):', attachment.query.query);
                 hasQuery = true;
             }
             
@@ -672,6 +670,7 @@ class GenieChat {
         // Log if neither data nor text was found
         if (!hasData && !result.attachments.some(a => a.text)) {
             console.warn('⚠️  No data or text explanation found in any attachment');
+            this.addMessage('assistant', 'Query completed but Genie returned no displayable results. Try rephrasing your question.');
         }
         
         this.scrollToBottom();
@@ -999,9 +998,9 @@ class GenieChat {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
                 const question = link.getAttribute('data-question');
-                if (question) {
+                if (question && !this.isLoading) {
                     this.elements.input.value = question;
-                    this.elements.input.focus();
+                    this.handleSend(); // Auto-submit the question
                 }
             });
         });
