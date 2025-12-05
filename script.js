@@ -623,48 +623,55 @@ class GenieChat {
             console.log(`📎 Attachment ${i}:`, att);
         });
         
-        const attachment = result.attachments[0];
         let hasData = false;
+        let hasQuery = false;
         
-        // Extract query result data
-        if (attachment.query && attachment.query.query_result) {
-            const queryResult = attachment.query.query_result;
-            console.log('📊 Query result object:', queryResult);
-            console.log('📏 Row count:', queryResult.row_count);
-            console.log('📋 Schema:', queryResult.schema);
-            console.log('📦 Data array:', queryResult.data_array);
-            console.log('📦 Data array length:', queryResult.data_array?.length);
+        // Check each attachment for different content types
+        for (let i = 0; i < result.attachments.length; i++) {
+            const attachment = result.attachments[i];
+            console.log(`\n📎 Processing attachment ${i}:`);
             
-            // Check if we have actual data
-            if (queryResult.data_array && queryResult.data_array.length > 0) {
-                console.log('✅ Found data! First 3 rows:', queryResult.data_array.slice(0, 3));
-                const tableHTML = this.renderDataTable(queryResult);
-                this.addMessage('assistant', tableHTML);
-                hasData = true;
-            } else {
-                console.warn('⚠️  No data in data_array');
+            // Check for query with data (old format)
+            if (attachment.query && attachment.query.query_result) {
+                const queryResult = attachment.query.query_result;
+                console.log('📊 Found query result data!');
+                console.log('📏 Row count:', queryResult.row_count);
+                console.log('📋 Schema:', queryResult.schema);
+                console.log('📦 Data array length:', queryResult.data_array?.length);
+                
+                if (queryResult.data_array && queryResult.data_array.length > 0) {
+                    console.log('✅ Rendering data table with', queryResult.data_array.length, 'rows');
+                    const tableHTML = this.renderDataTable(queryResult);
+                    this.addMessage('assistant', tableHTML);
+                    hasData = true;
+                }
             }
-        } else {
-            console.warn('⚠️  No query.query_result found in attachment');
+            
+            // Check for SQL query (show the SQL)
+            if (attachment.query && attachment.query.query) {
+                console.log('🔍 Found SQL query');
+                const sqlHTML = `<div class="genie-sql-code"><strong>Generated SQL:</strong><pre>${this.escapeHtml(attachment.query.query)}</pre></div>`;
+                this.addMessage('assistant', sqlHTML);
+                hasQuery = true;
+            }
+            
+            // Check for text explanation
+            if (attachment.text && attachment.text.content) {
+                console.log('💬 Found text explanation');
+                this.addMessage('assistant', attachment.text.content);
+            }
+            
+            // Check for suggested questions
+            if (attachment.suggested_questions && attachment.suggested_questions.questions) {
+                console.log('💡 Found suggested questions:', attachment.suggested_questions.questions);
+                const questionsHTML = this.renderSuggestedQuestions(attachment.suggested_questions.questions);
+                this.addMessage('assistant', questionsHTML);
+            }
         }
         
-        // Show Genie's explanation if available
-        if (attachment.text && attachment.text.content) {
-            console.log('💬 Genie explanation:', attachment.text.content);
-            this.addMessage('assistant', attachment.text.content);
-        }
-        
-        // Show the generated SQL
-        if (attachment.query && attachment.query.query) {
-            console.log('🔍 Generated SQL:', attachment.query.query);
-            const sqlHTML = `<div class="genie-sql-code"><pre>${this.escapeHtml(attachment.query.query)}</pre></div>`;
-            this.addMessage('assistant', sqlHTML);
-        }
-        
-        // If no data was shown, give user feedback
-        if (!hasData) {
-            console.warn('⚠️  No data rendered. Check console logs for response structure.');
-            this.addMessage('assistant', 'Query executed but no data was returned. Check browser console for details.');
+        // Log if neither data nor text was found
+        if (!hasData && !result.attachments.some(a => a.text)) {
+            console.warn('⚠️  No data or text explanation found in any attachment');
         }
         
         this.scrollToBottom();
@@ -732,6 +739,31 @@ class GenieChat {
         if (queryResult.truncated) {
             html += `<p style="color: var(--gold); font-size: 0.85rem; margin-top: 5px;">Showing first ${data_array.length} of ${row_count} rows</p>`;
         }
+        
+        return html;
+    }
+    
+    /**
+     * Render suggested questions as clickable links
+     * 
+     * INPUT: Array of question strings from Genie
+     * OUTPUT: HTML list with clickable questions
+     */
+    renderSuggestedQuestions(questions) {
+        if (!questions || questions.length === 0) {
+            return '';
+        }
+        
+        let html = '<div class="genie-suggested-questions">';
+        html += '<p><strong>💡 Related questions:</strong></p>';
+        html += '<ul>';
+        questions.forEach(q => {
+            // Make questions clickable to auto-fill input
+            const escapedQ = this.escapeHtml(q);
+            html += `<li><a href="#" class="suggested-question" data-question="${escapedQ}">${escapedQ}</a></li>`;
+        });
+        html += '</ul>';
+        html += '</div>';
         
         return html;
     }
@@ -826,6 +858,11 @@ class GenieChat {
         }
         
         this.elements.messages.appendChild(messageDiv);
+        
+        // Attach handlers to any suggested questions in this message
+        if (content.includes('suggested-question')) {
+            this.attachSuggestedQuestionHandlers();
+        }
         
         // Store in messages array
         this.messages.push({ role, content, timestamp: Date.now() });
@@ -940,6 +977,9 @@ class GenieChat {
                         }
                         this.elements.messages.appendChild(messageDiv);
                     });
+                    
+                    // Re-attach event listeners to suggested questions
+                    this.attachSuggestedQuestionHandlers();
                 }
                 
                 console.log('📂 State loaded from localStorage');
@@ -947,6 +987,24 @@ class GenieChat {
         } catch (error) {
             console.error('Failed to load state:', error);
         }
+    }
+    
+    /**
+     * Attach click handlers to suggested question links
+     * Call this after adding suggested questions to the DOM
+     */
+    attachSuggestedQuestionHandlers() {
+        const questionLinks = this.elements.messages.querySelectorAll('.suggested-question');
+        questionLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const question = link.getAttribute('data-question');
+                if (question) {
+                    this.elements.input.value = question;
+                    this.elements.input.focus();
+                }
+            });
+        });
     }
     
     /**

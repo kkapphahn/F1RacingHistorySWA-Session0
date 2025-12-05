@@ -1258,3 +1258,81 @@ section {
         font-size: 0.95rem;
     }
 }
+
+/* ================================
+   SUGGESTED QUESTIONS STYLING
+   ================================ */
+
+.genie-suggested-questions {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 215, 0, 0.05);
+    border-left: 3px solid var(--gold);
+    border-radius: 8px;
+}
+
+.genie-suggested-questions p {
+    margin: 0 0 10px 0;
+    color: var(--gold);
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.genie-suggested-questions ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.genie-suggested-questions li {
+    margin: 8px 0;
+}
+
+.genie-suggested-questions .suggested-question {
+    color: var(--light-gray);
+    text-decoration: none;
+    padding: 8px 12px;
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    font-size: 0.9rem;
+}
+
+.genie-suggested-questions .suggested-question:hover {
+    background: rgba(225, 6, 0, 0.1);
+    border-color: var(--primary-red);
+    color: var(--gold);
+    transform: translateX(5px);
+    cursor: pointer;
+}
+
+.genie-suggested-questions .suggested-question:active {
+    transform: translateX(5px) scale(0.98);
+}
+
+/* SQL code block styling */
+.genie-sql-code {
+    margin-top: 15px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border-left: 3px solid rgba(100, 100, 255, 0.5);
+}
+
+.genie-sql-code strong {
+    color: rgba(100, 150, 255, 0.9);
+    font-size: 0.85rem;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.genie-sql-code pre {
+    margin: 0;
+    color: rgba(200, 220, 255, 0.9);
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
