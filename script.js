@@ -608,6 +608,7 @@ class GenieChat {
      */
     displayResult(result) {
         console.log('🎨 Displaying result...');
+        console.log('📦 Full result object:', result);
         
         // Check if we have attachments
         if (!result.attachments || result.attachments.length === 0) {
@@ -615,33 +616,55 @@ class GenieChat {
             return;
         }
         
+        console.log('📎 Number of attachments:', result.attachments.length);
+        
+        // Log all attachments to understand structure
+        result.attachments.forEach((att, i) => {
+            console.log(`📎 Attachment ${i}:`, att);
+        });
+        
         const attachment = result.attachments[0];
+        let hasData = false;
         
         // Extract query result data
         if (attachment.query && attachment.query.query_result) {
             const queryResult = attachment.query.query_result;
-            console.log('📊 Query result data:', queryResult);
+            console.log('📊 Query result object:', queryResult);
             console.log('📏 Row count:', queryResult.row_count);
-            console.log('📋 Columns:', queryResult.schema?.columns);
-            console.log('📦 Data (first 3 rows):', queryResult.data_array?.slice(0, 3));
+            console.log('📋 Schema:', queryResult.schema);
+            console.log('📦 Data array:', queryResult.data_array);
+            console.log('📦 Data array length:', queryResult.data_array?.length);
             
-            // Render the data table
-            const tableHTML = this.renderDataTable(queryResult);
-            this.addMessage('assistant', tableHTML);
+            // Check if we have actual data
+            if (queryResult.data_array && queryResult.data_array.length > 0) {
+                console.log('✅ Found data! First 3 rows:', queryResult.data_array.slice(0, 3));
+                const tableHTML = this.renderDataTable(queryResult);
+                this.addMessage('assistant', tableHTML);
+                hasData = true;
+            } else {
+                console.warn('⚠️  No data in data_array');
+            }
+        } else {
+            console.warn('⚠️  No query.query_result found in attachment');
         }
         
         // Show Genie's explanation if available
         if (attachment.text && attachment.text.content) {
             console.log('💬 Genie explanation:', attachment.text.content);
-            // You could display this too if desired
+            this.addMessage('assistant', attachment.text.content);
         }
         
-        // Show the generated SQL (optional - for learning)
+        // Show the generated SQL
         if (attachment.query && attachment.query.query) {
             console.log('🔍 Generated SQL:', attachment.query.query);
-            // Uncomment to show SQL in the chat:
-            // const sqlHTML = `<div class="genie-sql-code"><pre>${this.escapeHtml(attachment.query.query)}</pre></div>`;
-            // this.addMessage('assistant', sqlHTML);
+            const sqlHTML = `<div class="genie-sql-code"><pre>${this.escapeHtml(attachment.query.query)}</pre></div>`;
+            this.addMessage('assistant', sqlHTML);
+        }
+        
+        // If no data was shown, give user feedback
+        if (!hasData) {
+            console.warn('⚠️  No data rendered. Check console logs for response structure.');
+            this.addMessage('assistant', 'Query executed but no data was returned. Check browser console for details.');
         }
         
         this.scrollToBottom();
