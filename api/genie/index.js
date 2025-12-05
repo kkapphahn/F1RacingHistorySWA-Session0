@@ -410,9 +410,11 @@ async function pollResult(workspaceUrl, token, spaceId, conversationId, messageI
 async function fetchStatementResult(workspaceUrl, token, statementId, context) {
     context.log(`Fetching statement result: ${statementId}`);
     
-    const url = `${workspaceUrl}/api/2.0/sql/statements/${statementId}/result`;
+    // Try the result endpoint first
+    let url = `${workspaceUrl}/api/2.0/sql/statements/${statementId}/result`;
+    context.log(`Trying result endpoint: ${url}`);
     
-    const response = await fetch(url, {
+    let response = await fetch(url, {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${token}`,
@@ -420,16 +422,43 @@ async function fetchStatementResult(workspaceUrl, token, statementId, context) {
         }
     });
     
+    // If 404, the statement might not exist or completed yet, try getting statement status first
+    if (response.status === 404) {
+        context.log('Result endpoint 404, trying statement status endpoint...');
+        url = `${workspaceUrl}/api/2.0/sql/statements/${statementId}`;
+        context.log(`Trying status endpoint: ${url}`);
+        
+        response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+    }
+    
     if (!response.ok) {
         const errorText = await response.text();
-        context.log.error('Statement result fetch failed:', response.status, errorText);
-        throw new Error(`Failed to fetch statement result: ${response.status} ${response.statusText}`);
+        context.log.error('Statement fetch failed:', response.status, errorText);
+        context.log.error('URL attempted:', url);
+        throw new Error(`Failed to fetch statement: ${response.status} ${response.statusText} - ${errorText}`);
     }
     
     const data = await response.json();
-    context.log('Statement result fetched:', JSON.stringify(data, null, 2));
+    context.log('Statement data fetched successfully');
+    context.log('Response keys:', Object.keys(data));
     
-    return data;
+    // If we got the statement status, extract the result
+    if (data.result) {
+        context.log('Found result in response');
+        return data;
+    } else if (data.status && data.status.state === 'SUCCEEDED') {
+        context.log('Statement succeeded but no result field, returning full response');
+        return data;
+    } else {
+        context.log.error('Unexpected response structure:', JSON.stringify(data, null, 2));
+        throw new Error('Statement response missing result data');
+    }
 }
 
 /**
