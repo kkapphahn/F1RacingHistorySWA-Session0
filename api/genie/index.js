@@ -95,6 +95,9 @@ module.exports = async function (context, req) {
             case 'poll-result':
                 result = await pollResult(DATABRICKS_WORKSPACE_URL, DATABRICKS_PAT_TOKEN, GENIE_SPACE_ID, conversationId, messageId, context);
                 break;
+            case 'fetch-statement-result':
+                result = await fetchStatementResult(DATABRICKS_WORKSPACE_URL, DATABRICKS_PAT_TOKEN, body.statementId, context);
+                break;
             default:
                 throw new Error(`Unknown action: ${action}`);
         }
@@ -368,6 +371,63 @@ async function pollResult(workspaceUrl, token, spaceId, conversationId, messageI
             context.log.error('Error details:', JSON.stringify(data.attachments[0], null, 2));
         }
     }
+    
+    return data;
+}
+
+/**
+ * FETCH STATEMENT RESULT
+ * 
+ * PURPOSE: Fetches the actual query results using the statement ID from Genie.
+ * When Genie executes a query, it returns a statement_id but may not include the actual data.
+ * This function retrieves the data from the SQL Statements API.
+ * 
+ * API ENDPOINT: GET /api/2.0/sql/statements/{statement_id}/result
+ * 
+ * RESPONSE STRUCTURE:
+ * {
+ *   "statement_id": "01ef1234-...",
+ *   "status": { "state": "SUCCEEDED" },
+ *   "manifest": {
+ *     "schema": {
+ *       "columns": [
+ *         { "name": "driver", "type_text": "STRING" },
+ *         { "name": "championships", "type_text": "LONG" }
+ *       ]
+ *     }
+ *   },
+ *   "result": {
+ *     "data_array": [
+ *       ["Sebastian Vettel", 4],
+ *       ["Alain Prost", 4],
+ *       ["Juan Manuel Fangio", 5]
+ *     ],
+ *     "row_count": 3,
+ *     "chunk_index": 0
+ *   }
+ * }
+ */
+async function fetchStatementResult(workspaceUrl, token, statementId, context) {
+    context.log(`Fetching statement result: ${statementId}`);
+    
+    const url = `${workspaceUrl}/api/2.0/sql/statements/${statementId}/result`;
+    
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+    
+    if (!response.ok) {
+        const errorText = await response.text();
+        context.log.error('Statement result fetch failed:', response.status, errorText);
+        throw new Error(`Failed to fetch statement result: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    context.log('Statement result fetched:', JSON.stringify(data, null, 2));
     
     return data;
 }

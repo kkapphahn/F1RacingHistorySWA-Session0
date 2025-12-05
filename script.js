@@ -497,7 +497,7 @@ class GenieChat {
             
             // 6. Display results
             this.hideTypingIndicator();
-            this.displayResult(result);
+            await this.displayResult(result);
             
         } catch (error) {
             console.error('❌ Error sending message:', error);
@@ -606,20 +606,45 @@ class GenieChat {
      * - schema.columns: Column names and types
      * - row_count: Number of rows returned
      */
-    displayResult(result) {
+    async displayResult(result) {
         console.log('🎨 Displaying result...');
         console.log('📦 Full result object:', result);
         
+        let hasData = false;
+        
         // Check if there's a top-level query_result with statement_id (means query was executed)
-        if (result.query_result) {
+        if (result.query_result && result.query_result.statement_id) {
             console.log('🔑 Found query_result at top level:', result.query_result);
             console.log('🆔 Statement ID:', result.query_result.statement_id);
             console.log('📊 Row count:', result.query_result.row_count);
             
-            // If we have a statement_id but no data, we need to fetch the results separately
-            if (result.query_result.statement_id && result.query_result.row_count > 0) {
-                console.log('⚠️  Query has results but data not included in response. Need to fetch via statement API.');
-                this.addMessage('assistant', `Query executed successfully and returned ${result.query_result.row_count} rows, but Genie is not configured to return the actual data. Please check your Genie Space settings to enable "Show data in responses".`);
+            // Fetch the actual results using the statement ID
+            if (result.query_result.row_count > 0) {
+                console.log('📥 Fetching statement results...');
+                try {
+                    const statementResult = await this.callAPI('fetch-statement-result', {
+                        statementId: result.query_result.statement_id
+                    });
+                    
+                    console.log('✅ Statement result fetched:', statementResult);
+                    
+                    // Convert statement result to Genie format and render as table
+                    if (statementResult.result && statementResult.result.data_array) {
+                        const queryResult = {
+                            data_array: statementResult.result.data_array,
+                            schema: statementResult.manifest.schema,
+                            row_count: statementResult.result.row_count,
+                            truncated: statementResult.result.truncated || false
+                        };
+                        
+                        const tableHTML = this.renderDataTable(queryResult);
+                        this.addMessage('assistant', tableHTML);
+                        hasData = true;
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to fetch statement results:', error);
+                    this.addMessage('assistant', `Query executed with ${result.query_result.row_count} rows but failed to fetch results: ${error.message}`);
+                }
             }
         }
         
@@ -636,7 +661,6 @@ class GenieChat {
             console.log(`📎 Attachment ${i}:`, att);
         });
         
-        let hasData = false;
         let hasQuery = false;
         
         // Check each attachment for different content types
