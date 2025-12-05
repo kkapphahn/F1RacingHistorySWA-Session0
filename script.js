@@ -549,8 +549,10 @@ class GenieChat {
         console.log(`📊 Poll result - Status: ${result.status}`);
         
         // Check status
-        if (result.status === 'EXECUTING') {
+        // FILTERING_CONTEXT, EXECUTING, QUERY_RESULT_EXPIRED are intermediate states
+        if (result.status === 'EXECUTING' || result.status === 'FILTERING_CONTEXT' || result.status === 'QUERY_RESULT_EXPIRED') {
             // Still processing, poll again
+            console.log(`⏳ Status: ${result.status} - continuing to poll...`);
             return this.pollForResult(messageId, attempt + 1);
         } else if (result.status === 'COMPLETED') {
             console.log('✅ Message completed!');
@@ -560,8 +562,9 @@ class GenieChat {
             console.error('❌ Message failed:', result);
             throw new Error('Query failed: ' + (result.error || 'Unknown error'));
         } else {
-            console.warn('⚠️  Unexpected status:', result.status);
-            throw new Error('Unexpected status: ' + result.status);
+            // Unknown status - log it but try to continue polling
+            console.warn('⚠️  Unknown status:', result.status, '- will try polling again');
+            return this.pollForResult(messageId, attempt + 1);
         }
     }
     
