@@ -156,8 +156,15 @@ module.exports = async function (context, req) {
 async function startConversation(workspaceUrl, token, spaceId, context) {
     const url = `${workspaceUrl}/api/2.0/genie/spaces/${spaceId}/start-conversation`;
     
+    // Try different variations of the request body based on Databricks API requirements
+    const requestBody = {
+        content: 'F1 Racing History Chat',  // Some versions use 'content'
+        title: 'F1 Racing History Chat'     // Some versions use 'title'
+    };
+    
     context.log('=== Starting Conversation ===');
     context.log('URL:', url);
+    context.log('Request body:', JSON.stringify(requestBody, null, 2));
     
     const response = await fetch(url, {
         method: 'POST',
@@ -165,19 +172,20 @@ async function startConversation(workspaceUrl, token, spaceId, context) {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-            title: 'F1 Racing History Chat'  // Required field for starting conversation
-        })
+        body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
         const errorText = await response.text();
-        context.log.error('Failed to start conversation:', errorText);
+        context.log.error('Failed to start conversation');
+        context.log.error('Status:', response.status);
+        context.log.error('Response:', errorText);
+        context.log.error('Request body was:', JSON.stringify(requestBody, null, 2));
         throw new Error(`Failed to start conversation: ${response.status} ${errorText}`);
     }
 
     const data = await response.json();
-    context.log('Conversation started successfully!');
+    context.log('✅ Conversation started successfully!');
     context.log('Conversation ID:', data.conversation_id);
     context.log('Full response:', JSON.stringify(data, null, 2));
     
