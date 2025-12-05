@@ -487,6 +487,31 @@ section {
     justify-content: center;
 }
 
+/* Unique gradients for each champion */
+.champion-card:nth-child(1) .champion-image {
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.champion-card:nth-child(2) .champion-image {
+    background: linear-gradient(135deg, #15803d 0%, #22c55e 50%, #86efac 100%);
+}
+
+.champion-card:nth-child(3) .champion-image {
+    background: linear-gradient(135deg, #dc2626 0%, #ef4444 50%, #fca5a5 100%);
+}
+
+.champion-card:nth-child(4) .champion-image {
+    background: linear-gradient(135deg, #065f46 0%, #10b981 50%, #6ee7b7 100%);
+}
+
+.champion-card:nth-child(5) .champion-image {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #93c5fd 100%);
+}
+
+.champion-card:nth-child(6) .champion-image {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #60a5fa 100%);
+}
+
 .champion-overlay {
     position: absolute;
     top: 0;
