@@ -610,6 +610,19 @@ class GenieChat {
         console.log('🎨 Displaying result...');
         console.log('📦 Full result object:', result);
         
+        // Check if there's a top-level query_result with statement_id (means query was executed)
+        if (result.query_result) {
+            console.log('🔑 Found query_result at top level:', result.query_result);
+            console.log('🆔 Statement ID:', result.query_result.statement_id);
+            console.log('📊 Row count:', result.query_result.row_count);
+            
+            // If we have a statement_id but no data, we need to fetch the results separately
+            if (result.query_result.statement_id && result.query_result.row_count > 0) {
+                console.log('⚠️  Query has results but data not included in response. Need to fetch via statement API.');
+                this.addMessage('assistant', `Query executed successfully and returned ${result.query_result.row_count} rows, but Genie is not configured to return the actual data. Please check your Genie Space settings to enable "Show data in responses".`);
+            }
+        }
+        
         // Check if we have attachments
         if (!result.attachments || result.attachments.length === 0) {
             this.addMessage('assistant', 'Genie processed your query but returned no data.');
