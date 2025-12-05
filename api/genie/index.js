@@ -140,7 +140,7 @@ module.exports = async function (context, req) {
  * 
  * API ENDPOINT: POST /api/2.0/genie/spaces/{space_id}/start-conversation
  * 
- * REQUEST BODY: Empty object {}
+ * REQUEST BODY: { "title": "Conversation title" }  // title is required
  * 
  * RESPONSE STRUCTURE:
  * {
@@ -165,7 +165,9 @@ async function startConversation(workspaceUrl, token, spaceId, context) {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({})  // Empty body to start conversation
+        body: JSON.stringify({
+            title: 'F1 Racing History Chat'  // Required field for starting conversation
+        })
     });
 
     if (!response.ok) {
