@@ -372,6 +372,12 @@ class GenieChat {
         this.elements.closeBtn.addEventListener('click', () => this.toggle());
         this.elements.sendBtn.addEventListener('click', () => this.handleSend());
         
+        // Clear conversation button
+        const clearBtn = document.getElementById('genie-clear-btn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => this.clearConversation());
+        }
+        
         // Handle Enter key (Shift+Enter for new line)
         this.elements.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -413,6 +419,66 @@ class GenieChat {
             this.elements.input.focus();
             this.scrollToBottom();
         }
+    }
+    
+    /**
+     * Clear conversation and start fresh
+     * Removes all messages, resets conversation state, and shows welcome message
+     */
+    clearConversation() {
+        // Confirm with user
+        if (this.messages.length > 0) {
+            const confirmed = confirm('Clear conversation history and start over?');
+            if (!confirmed) return;
+        }
+        
+        console.log('🗑️  Clearing conversation...');
+        
+        // Reset state
+        this.conversationId = null;
+        this.messages = [];
+        this.lastQuery = null;
+        
+        // Clear localStorage
+        localStorage.removeItem('GENIE_CHAT_STATE');
+        
+        // Clear messages from UI
+        this.elements.messages.innerHTML = '';
+        
+        // Show welcome message again
+        const welcomeHTML = `
+            <div class="genie-welcome">
+                <p class="genie-welcome-text">Ask me anything about F1 history!</p>
+                <div class="genie-examples">
+                    <button class="genie-example-btn" data-query="Who won the most championships?">
+                        Who won the most championships?
+                    </button>
+                    <button class="genie-example-btn" data-query="Show me fastest lap records">
+                        Show me fastest lap records
+                    </button>
+                    <button class="genie-example-btn" data-query="Tell me about the 1988 season">
+                        Tell me about the 1988 season
+                    </button>
+                </div>
+            </div>
+        `;
+        this.elements.messages.innerHTML = welcomeHTML;
+        
+        // Re-attach event listeners to example buttons
+        const exampleBtns = this.elements.messages.querySelectorAll('.genie-example-btn');
+        exampleBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const query = btn.getAttribute('data-query');
+                this.elements.input.value = query;
+                this.handleSend();
+            });
+        });
+        
+        // Clear input
+        this.elements.input.value = '';
+        this.elements.sendBtn.disabled = true;
+        
+        console.log('✅ Conversation cleared');
     }
     
     /**

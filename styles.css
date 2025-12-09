@@ -904,6 +904,34 @@ section {
     color: var(--darker-bg);
 }
 
+.genie-header-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.genie-clear-btn {
+    background: rgba(0, 0, 0, 0.2);
+    border: none;
+    color: var(--darker-bg);
+    cursor: pointer;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.genie-clear-btn:hover {
+    background: rgba(0, 0, 0, 0.4);
+    transform: translateY(-2px);
+}
+
+.genie-clear-btn:active {
+    transform: translateY(0);
+}
+
 .genie-close-btn {
     background: transparent;
     border: none;
